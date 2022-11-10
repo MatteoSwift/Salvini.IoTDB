@@ -1,0 +1,30 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>net6.0</TargetFramework>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+		<Version>2.13.1110</Version>
+		<Description>Apache IoTDB Client</Description>
+		<NoWarn>CS0168;CS8618;CS8600;CS8602;CS8603;CS8604;CS8625;CS8765</NoWarn>
+		<Copyright>Salvini</Copyright>
+		<Authors>Salvini</Authors>
+		<DebugType>embedded</DebugType>
+		<PackageReadmeFile>README.md</PackageReadmeFile>
+		<PackageProjectUrl>https://github.com/MatteoSwift/Salvini.IoTDB.git</PackageProjectUrl>
+		<RepositoryUrl>https://github.com/MatteoSwift/Salvini.IoTDB.git</RepositoryUrl>
+		<PackageTags>IoTDB</PackageTags>
+		<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="ApacheThrift" Version="0.16.0" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<None Update="README.md">
+			<Pack>True</Pack>
+			<PackagePath>\</PackagePath>
+		</None>
+	</ItemGroup>
+</Project>

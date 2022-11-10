@@ -1,0 +1,28 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.3.32929.385
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Salvini.IoTDB", "Salvini.IoTDB.csproj", "{53135919-AF89-40AB-BC44-5153BE42273C}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{53135919-AF89-40AB-BC44-5153BE42273C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{53135919-AF89-40AB-BC44-5153BE42273C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{53135919-AF89-40AB-BC44-5153BE42273C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{53135919-AF89-40AB-BC44-5153BE42273C}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {B7E963CE-98DA-4668-A9AB-04520FE27CD0}
+	EndGlobalSection
+	GlobalSection(MonoDevelopProperties) = preSolution
+		description = Apache IoTDB v0.13.x 访问客户端
+	EndGlobalSection
+EndGlobal
