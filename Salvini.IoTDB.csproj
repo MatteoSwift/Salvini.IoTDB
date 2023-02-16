@@ -4,7 +4,7 @@
 		<TargetFramework>net6.0</TargetFramework>
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
-		<Version>2.13.1110</Version>
+		<Version>1.0.23.216</Version>
 		<Description>Apache IoTDB Client</Description>
 		<NoWarn>CS0168;CS8618;CS8600;CS8602;CS8603;CS8604;CS8625;CS8765</NoWarn>
 		<Copyright>Salvini</Copyright>

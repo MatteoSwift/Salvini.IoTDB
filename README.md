@@ -14,7 +14,6 @@ IoTDB C# 客户端，提供 PI\eDNA 类似的访问接口，与原生的 session
 
 > 这是最接近官方的 Apache IoTDB Client - C#版客户端，完全原生接口。由于不太符合本人的使用习惯，故提供此库。
 
-IoTDB-SQL 着实令人恼火，其内部人员还美其名曰要走自己的路形成规范，学生啊太自信了，而本身就没规范可言，如 where 和 group by 语义冲突...
 
 > 期盼：iotdb server 端可以支持 plot 查询（降采样，但保留特征值的趋势曲线，如果能做到 1 秒查询 1 周趋势就厉害了！）
 
@@ -31,7 +30,7 @@ thrif-0.16.0.exe -r -gen netstd rpc.thrift
 
 # TimeSeries Client
 
-- 采用 Apache IoTDB 时许数据库，提供类似 PI、eDNA 传统实时历史数据库访问 API
+- 采用 Apache IoTDB 时序数据库，提供类似 PI、eDNA 传统实时历史数据库访问 API
 - 采用 MongoDB 连接字符串格式，如 `iotdb://root:admin#123@127.0.0.1:6667/database=dbname&fetchSize=1800&poolSize=8`
 
 ## 关键概念
@@ -61,9 +60,17 @@ class Program
 
 ```
 
+NOTICE: 版本命名变化，跟随 `iotdb` 主版本.子版本.`yy.mmdd`
+
+
+## Version 1.0.23.216
+- 解决 `DataToCsvAsync` 方法BUG，当无测点时，导致程序异常。
+
+
 ## Version 2.13.1110
 - 解决 `TimeSeriesClient` 实例化时控制台输出 `Version` 错误BUG
 - 增加 `DataToCsvAsync` 方法，支持将数据导出至 CSV 文件，注意：按 History 方式导出数据
+
 
 ## Version 2.13.985
 - 增强 `BulkWriteAsync` 实现，支持大数据写入
@@ -81,7 +88,6 @@ class Program
 
 - 实现`ArchiveAsync`批量数据查询功能
 - 解决`HistoryAsync`批量查询时测点与数据不对应的BUG
-
 
 
 ## Version 2.13.970.0

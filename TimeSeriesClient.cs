@@ -555,14 +555,18 @@ public sealed class TimeSeriesClient : IDisposable
     /// <param name="tags">测点列表，不指定时则导出所有测点</param> 
     public async Task DataToCsvAsync(DateTime start, DateTime end, List<string> tags = null)
     {
-        if (Directory.Exists("csv"))
-        {
-            Directory.Delete("csv", true);
-        }
+        if (Directory.Exists("csv")) Directory.Delete("csv", true);
+
         Directory.CreateDirectory("csv");
-        if (tags == null)
+
+        if (tags == null) tags = (await this.PointsAsync()).OrderBy(x => x.Tag).Select(x => x.Tag).ToList() ?? new List<string>();
+
+        if (!tags.Any())
         {
-            tags =(await this.PointsAsync()).OrderBy(x => x.Tag).Select(x => x.Tag).ToList();
+            Console.ForegroundColor = ConsoleColor.DarkCyan;
+            Console.WriteLine($"数据库为空, 不存在测点数据!");
+            Console.ResetColor();
+            return;
         }
 
         Console.ForegroundColor = ConsoleColor.DarkGreen;
