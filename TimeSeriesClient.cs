@@ -1,8 +1,10 @@
+using System;
+using System.ComponentModel.DataAnnotations;using System.Diagnostics.Metrics;using System.IO;
+using System.Security.Cryptography.X509Certificates;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using Salvini.IoTDB.Data;
-using static TSIService;
 
 namespace Salvini.IoTDB;
 
@@ -129,20 +131,43 @@ public sealed class TimeSeriesClient : IDisposable
         var port = match_port.Success ? int.Parse(match_port.Value[1..].Replace("/", string.Empty)) : 6667;
         var username = match_user.Success ? match_user.Value[8..^1] : "root";
         var password = match_pwd.Success ? match_pwd.Value[1..^1] : "admin#123";
-        var fetchSize = match_fetch.Success ? int.Parse(match_fetch.Value[10..]) : 1800;
+        var fetchSize = match_fetch.Success ? int.Parse(match_fetch.Value[10..]) : 18000;
         var poolSize = match_pool.Success ? int.Parse(match_pool.Value[9..]) : Environment.ProcessorCount;
 
         database = match_db.Success ? match_db.Value[9..] : "db";
         session = new Session(host, port, username, password, fetchSize, poolSize);
         session.OpenAsync().Wait(TimeSpan.FromSeconds(5));
         if (session.IsOpen) Version = new Version((string)this.session.ExecuteQueryStatementAsync("show version").Result.Next()?.Values[0]);
-
-        Console.ForegroundColor = ConsoleColor.DarkYellow;
-        Console.WriteLine($"IoTDB>>Version:{Version};Open:{session.IsOpen};Host:{host};Port:{port};User:{username};Database:{database};ThreadCount:{session.ThreadCount}");
-        Console.ResetColor();
+        Console.WriteLine($"\x1b[33mIoTDB>>Version:{Version};Open:{session.IsOpen};Host:{host};Port:{port};User:{username};Database:{database};ThreadCount:{session.ThreadCount}\x1b[0m");
     }
 
     private string BuildTagName(string tag) => (this.Version.Major == 0 && this.Version.Minor <= 12) || tag.All(x => x != '-') ? tag : $"`{tag}`";
+
+    /// <summary>
+    /// 连接数据库
+    /// </summary>
+    public async Task<bool> OpenAsync()
+    {
+        if (!session.IsOpen) await session.OpenAsync();
+        return session.IsOpen;
+    }
+
+    /// <summary>
+    /// 关闭数据库
+    /// </summary>
+    public async Task<bool> CloseAsync()
+    {
+        await session.CloseAsync();
+        return true;
+    }
+
+    /// <summary>
+    /// 释放连接资源
+    /// </summary>
+    public void Dispose()
+    {
+        this.CloseAsync().Wait();
+    }
 
     /// <summary>
     /// 获取测点快照数据
@@ -228,17 +253,25 @@ public sealed class TimeSeriesClient : IDisposable
     /// <param name="digits">数据精度,默认6位小数</param> 
     public async Task<List<(DateTime Time, double Value)>> HistoryAsync(string tag, DateTime begin, DateTime end, int digits = 6, int ms = 1000)
     {
-        var @break = false;
+        //var @break = false;
         var data = new List<(DateTime Time, double Value)>();
-        if ((end - begin).TotalHours > 4)//4小时以内可以不检测数据是否存在
+        //if ((end - begin).TotalHours > 4)//4小时以内可以不检测数据是否存在
+        //{
+        //    var sql = $"select count({this.BuildTagName(tag)}) as exist from root.{database} where time >= {begin:yyyy-MM-dd HH:mm:ss} and time < {end:yyyy-MM-dd HH:mm:ss}";
+        //    using var query = await session.ExecuteQueryStatementAsync(sql);
+        //    @break = query.HasNext() && (long)query.Next().Values[0] == 0;
+        //}
+        //if (!@break)
         {
-            var sql = $"select count({this.BuildTagName(tag)}) as exist from root.{database} where time >= {begin:yyyy-MM-dd HH:mm:ss} and time < {end:yyyy-MM-dd HH:mm:ss}";
-            using var query = await session.ExecuteQueryStatementAsync(sql);
-            @break = query.HasNext() && (long)query.Next().Values[0] == 0;
-        }
-        if (!@break)
-        {
-            var sql = $"select last_value({this.BuildTagName(tag)}) as {this.BuildTagName(tag)} from root.{database} group by ([{begin:yyyy-MM-dd HH:mm:ss},{end.AddMilliseconds(ms):yyyy-MM-dd HH:mm:ss}), {ms}ms) fill(double[previous])";
+            var sql = $"select last_value({this.BuildTagName(tag)}) as {this.BuildTagName(tag)} from root.{database} group by ([{begin:yyyy-MM-dd HH:mm:ss},{end.AddMilliseconds(ms):yyyy-MM-dd HH:mm:ss}), {ms}ms)";
+            if (Version.Major >= 1)
+            {
+                sql += " fill(previous)";
+            }
+            else if (Version.Major == 0)
+            {
+                sql += " fill(double[previous])";
+            }
             using var query = await session.ExecuteQueryStatementAsync(sql);
             while (query.HasNext())
             {
@@ -262,17 +295,32 @@ public sealed class TimeSeriesClient : IDisposable
     /// <param name="ms">采样间隔,单位毫秒,默认1秒</param>
     public async Task<Dictionary<string, List<(DateTime Time, double Value)>>> HistoryAsync(List<string> tags, DateTime begin, DateTime end, int digits = 6, int ms = 1000)
     {
-        var @break = false;
+        tags = tags.Distinct().ToList();
+        //var @break = false;
         var data = tags.ToDictionary(kv => kv, kv => new List<(DateTime Time, double Value)>());
-        if ((end - begin).TotalHours > 4)//4小时以内可以不检测数据是否存在
+        //if ((end - begin).TotalHours > 4)//4小时以内可以不检测数据是否存在
+        //{
+        //    var sql = $"select count({this.BuildTagName(tags[0])}) as exist from root.{database} where time >= {begin:yyyy-MM-dd HH:mm:ss} and time < {end:yyyy-MM-dd HH:mm:ss}";
+        //    using var query = await session.ExecuteQueryStatementAsync(sql);
+        //    @break = query.HasNext() && (long)query.Next().Values[0] == 0;
+        //}
+        //if (!@break)
+        var skip = 0;
+        var take = 100;
+        while (true)
         {
-            var sql = $"select count({this.BuildTagName(tags[0])}) as exist from root.{database} where time >= {begin:yyyy-MM-dd HH:mm:ss} and time < {end:yyyy-MM-dd HH:mm:ss}";
-            using var query = await session.ExecuteQueryStatementAsync(sql);
-            @break = query.HasNext() && (long)query.Next().Values[0] == 0;
-        }
-        if (!@break)
-        {
-            var sql = $"select {string.Join(",", tags.Select(this.BuildTagName).Select(tag => $"last_value({tag}) as {tag}"))} from root.{database} group by ([{begin:yyyy-MM-dd HH:mm:ss},{end.AddMilliseconds(ms):yyyy-MM-dd HH:mm:ss}), {ms}ms) fill(double[previous])";
+            var points = tags.Skip(skip++ * take).Take(take).ToList();
+            if (!points.Any()) break;
+
+            var sql = $"select {string.Join(",", points.Select(this.BuildTagName).Select(tag => $"last_value({tag}) as {tag}"))} from root.{database} group by ([{begin:yyyy-MM-dd HH:mm:ss},{end.AddMilliseconds(ms):yyyy-MM-dd HH:mm:ss}), {ms}ms)";
+            if (Version.Major >= 1)
+            {
+                sql += " fill(previous)";
+            }
+            else if (Version.Major == 0)
+            {
+                sql += " fill(double[previous])";
+            }
             using var query = await session.ExecuteQueryStatementAsync(sql);
             while (query.HasNext())
             {
@@ -288,7 +336,6 @@ public sealed class TimeSeriesClient : IDisposable
             }
         }
         return data;
-
     }
 
     /// <summary>
@@ -359,52 +406,29 @@ public sealed class TimeSeriesClient : IDisposable
     /// <param name="time">时间戳</param> 
     /// <param name="data">测点数据</param>
     public async Task BulkWriteAsync(DateTime time, List<(string Tag, double Value)> data)
-    {
-        var matrix = new dynamic[2, data.Count + 1];
-        matrix[0, 0] = "Timestamp";
-        matrix[1, 0] = time;
-        for (int j = 0; j < data.Count; j++)
-        {
-            matrix[0, j + 1] = data[j].Tag;
-            matrix[1, j + 1] = data[j].Value;
-        }
-        await BulkWriteAsync(matrix);
-    }
+    {        var values = data.Select(x => (dynamic)x.Value).ToList();        var measurements = data.Select(x => x.Tag).ToList();        var record = new RowRecord(time, values, measurements);        var effect = await session.InsertRecordAsync($"root.{database}", record, false);
 
-    /// <summary>
-    /// 多测点单时刻数据
-    /// </summary>
-    /// <param name="time">时间戳</param> 
-    /// <param name="data">测点数据</param>
-    public async Task BulkWriteAsync(DateTime time, Dictionary<string, double> data)
-    {
-        var matrix = new dynamic[2, data.Count + 1];
-        matrix[0, 0] = "Timestamp";
-        matrix[1, 0] = time;
-        for (int j = 0; j < data.Count; j++)
-        {
-            matrix[0, j + 1] = data.ElementAt(j).Key;
-            matrix[1, j + 1] = data.ElementAt(j).Value;
-        }
-        await BulkWriteAsync(matrix);
+        //var matrix = new dynamic[2, data.Count + 1];
+        //matrix[0, 0] = "Timestamp";
+        //matrix[1, 0] = time;
+        //for (int j = 0; j < data.Count; j++)
+        //{
+        //    matrix[0, j + 1] = data[j].Tag;
+        //    matrix[1, j + 1] = data[j].Value;
+        //}
+        //await BulkWriteAsync(matrix);
     }
-
-    /// <summary>
-    /// 获取测点快照数据
-    /// </summary> 
-    /// <param name="tags">测点集合</param>
-    public async Task BulkWriteAsync(Dictionary<string, List<(DateTime Time, double Value)>> data)
-    {
-        foreach (var kv in data)
-        {
-            await this.BulkWriteAsync(kv.Key, kv.Value);
-        }
-    }
-
+    
     /// <summary>
     /// 写入数据
     /// </summary>
-    /// <param name="matrix"></param>
+    /// <param name="matrix">
+    /// The matrix like :
+    /// <br/>
+    ///  Timestamp, tags...
+    /// <br/>
+    ///  DateTime, values...
+    /// </param>
     public async Task BulkWriteAsync(dynamic[,] matrix)
     {
         var rows = matrix.GetUpperBound(0) + 1;
@@ -412,12 +436,10 @@ public sealed class TimeSeriesClient : IDisposable
         if (rows != 0)
         {
             var cols = Enumerable.Range(1, columns - 1).ToList();
-            var measurements = cols.Select((j) => ((string)matrix[0, j]).Replace("root.", string.Empty)).ToList();
+            var measurements = cols.Select((j) => BuildTagName(((string)matrix[0, j])).Replace("root.", string.Empty)).ToList();
             if (rows == 2)
             {
-                var values = cols.Select((j) => matrix[1, j]).ToList();
-                var record = new RowRecord(UTC_MS(matrix[1, 0]), values, measurements);
-                var effect = await session.InsertRecordAsync($"root.{database}", record, false);
+                var values = cols.Select((j) => matrix[1, j]).ToList();                var record = new RowRecord(UTC_MS(matrix[1, 0]),values,measurements);                var effect = await session.InsertRecordAsync($"root.{database}", record, false); 
             }
             else
             {
@@ -472,24 +494,6 @@ public sealed class TimeSeriesClient : IDisposable
     }
 
     /// <summary>
-    /// 连接数据库
-    /// </summary>
-    public async Task<bool> OpenAsync()
-    {
-        if (!session.IsOpen) await session.OpenAsync();
-        return session.IsOpen;
-    }
-
-    /// <summary>
-    /// 关闭数据库
-    /// </summary>
-    public async Task<bool> CloseAsync()
-    {
-        await session.CloseAsync();
-        return true;
-    }
-
-    /// <summary>
     /// 搜索测点
     /// </summary>
     /// <param name="device">所属设备或数据库</param>
@@ -514,17 +518,23 @@ public sealed class TimeSeriesClient : IDisposable
             }
             return new JsonObject();
         }
-        using var query = await session.ExecuteQueryStatementAsync($"show timeseries root.{database}");
+        var sql = $"show timeseries root.{database}";
+        if (Version.Major >= 1)
+        {
+            sql += ".**";
+        }
+        using var query = await session.ExecuteQueryStatementAsync(sql);
         var points = new List<(string Tag, string? Type, string? Desc, string? Unit)>();
         var len = database.Length + 6;
         var reg = new Regex(keywords ?? "", RegexOptions.IgnoreCase);
         while (query.HasNext())
         {
             var next = query.Next();
+            var index = next.Measurements.FindIndex(x => string.Equals(x, "tags", StringComparison.OrdinalIgnoreCase));
             var values = next.Values;
             var id = ((string)values[0])[len..];
             if (!reg.IsMatch(id)) continue;
-            var tags = DeserializeObject((string)values[^2]) ?? new JsonObject();
+            var tags = DeserializeObject((string)values[index]) ?? new JsonObject();
             points.Add((id, (string)tags["t"], (string)tags["u"], (string)tags["d"]));
         }
         return points;
@@ -548,67 +558,70 @@ public sealed class TimeSeriesClient : IDisposable
     }
 
     /// <summary>
-    /// 数据导出CSV
+    /// 历史数据导出CSV
     /// </summary>
     /// <param name="start">开始时间</param>
     /// <param name="end">截止时间</param>
-    /// <param name="tags">测点列表，不指定时则导出所有测点</param> 
-    public async Task DataToCsvAsync(DateTime start, DateTime end, List<string> tags = null)
+    /// <param name="tags">测点集合</param>
+    public async Task DataToCsvAsync(DateTime start, DateTime end, List<string> tags)
     {
-        if (Directory.Exists("csv")) Directory.Delete("csv", true);
-
-        Directory.CreateDirectory("csv");
-
-        if (tags == null) tags = (await this.PointsAsync()).OrderBy(x => x.Tag).Select(x => x.Tag).ToList() ?? new List<string>();
-
-        if (!tags.Any())
-        {
-            Console.ForegroundColor = ConsoleColor.DarkCyan;
-            Console.WriteLine($"数据库为空, 不存在测点数据!");
-            Console.ResetColor();
-            return;
-        }
-
-        Console.ForegroundColor = ConsoleColor.DarkGreen;
-        Console.WriteLine($"准备数据导出, 测点数量: {tags.Count}, 时间: {start:yyyy-MM-dd} ~ {end:yyyy-MM-dd}");
-        Console.ResetColor();
+        tags = tags?.Where(x => !string.IsNullOrEmpty(x)).ToList() ?? new List<string>();
+        var pts = (await this.PointsAsync()).ToDictionary(x => x.Tag, x => x);
+        var points = tags.Any() ? tags.Where(x => pts.Any(y => y.Key == x)).ToList() : pts.OrderBy(x => x.Key).Select(x => x.Key).ToList();
         var time = start;
+        var delta = points.Count > 50000 ? 1 : (points.Count > 2000 ? 2 : (points.Count > 1000 ? 3 : 4));
+        if (Directory.Exists("csv")) Directory.Delete("csv", true);
+        Directory.CreateDirectory("csv");
+        Console.WriteLine($"\x1b[36m{DateTime.Now:yyyy-MM-dd HH:mm:ss} \x1b[36mReady to export !!\x1b[0m");
         while (time < end)
         {
-            var fn = $"csv/{start:yyyy-MM-dd}.csv";
-            Console.ForegroundColor = ConsoleColor.DarkCyan;
-            Console.WriteLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} 读取数据 {time:yyyy-MM-dd} +({(time.Hour + 1).ToString().PadLeft(2, '0')}H)");
-            Console.ResetColor();
-            var hist = this.HistoryAsync(tags, time, time.AddHours(1).AddSeconds(-1)).Result;
-            if (!File.Exists(fn))
+            var et = time.AddHours(delta);
+            var hist = await this.HistoryAsync(points, time, et);
+            var path = $"csv/{time:yyyy-MM-dd}.csv";
+            if (!File.Exists(path))
             {
-                File.WriteAllText(fn, $"Timestamp,{string.Join(",", tags)}{Environment.NewLine}", System.Text.Encoding.UTF8);
-            }
-            if (hist.Any())
-            {
-                var times = hist[tags[0]].Select(x => $"{x.Time:yyyy-MM-dd HH:mm:ss}").ToList();
-                var lines = new List<string>();
-                for (var i = 0; i < times.Count; i++)
+                var header = new[]
                 {
-                    var ln = $"{times[i]},{string.Join(",", hist.Select(kv => kv.Value[i].Value.ToString()))}";
-                    lines.Add(ln);
-                }
-                File.AppendAllLines(fn, lines, System.Text.Encoding.UTF8);
-                Console.ForegroundColor = ConsoleColor.DarkYellow;
-                Console.WriteLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} 数据写入文件 `{fn}`");
-                Console.ResetColor();
+                    "DESC," + string.Join(',', points.Select(x => pts[x].Desc ?? $"[{pts[x].Tag}]")),
+                    "TYPE," + string.Join(',', points.Select(x => pts[x].Type??"AI")),
+                    "TAG," + string.Join(',', points.Select(x => pts[x].Tag)),
+                };
+                await File.WriteAllLinesAsync(path, header, System.Text.Encoding.UTF8);
             }
-            time = time.AddHours(1);
+            var lines = new string[hist.First().Value.Count];
+            for (var i = 0; i < lines.Length; i++)
+            {
+                lines[i] = $"{time.AddSeconds(i):HH:mm:ss}," + string.Join(',', points.Select(x => hist[x][i].Value.ToString()));
+            }
+            await File.AppendAllLinesAsync(path, lines, System.Text.Encoding.UTF8);
+            Console.WriteLine($"\x1b[36m{DateTime.Now:yyyy-MM-dd HH:mm:ss} \x1b[34mexport to \x1b[33m'{path}'\x1b[34m -> \x1b[32m{time:yyyy-MM-dd (HH)} [+{delta}H]\x1b[0m");
+            time = et;
         }
-        Console.ForegroundColor = ConsoleColor.DarkGreen;
-        Console.WriteLine("数据导出完毕！");
+        Console.WriteLine($"\x1b[36m{DateTime.Now:yyyy-MM-dd HH:mm:ss} Finish to export !!\x1b[0m");
     }
-
+ 
     /// <summary>
-    /// 释放连接资源
+    /// 导入历史数据CSV
     /// </summary>
-    public void Dispose()
-    {
-        this.CloseAsync().Wait();
+    /// <param name="files">csv文件</param>
+    public async Task DataFromCsvAsync(string[] files)
+    {        var totalSize = 0d;        Console.WriteLine($"\x1b[36m{DateTime.Now:yyyy-MM-dd HH:mm:ss} \x1b[36mReady to import !!\x1b[0m");
+        for (var i = 0; i < files.Length; i++)
+        {            var file = new FileInfo(files[i]);            if (!file.Exists) continue;             var src = file.FullName;
+            var fileSize = file.Length / 1024.0 / 1024.0;
+            var filename = file.Name;
+            var date = filename.Replace(".csv", "", StringComparison.OrdinalIgnoreCase);            totalSize += fileSize;            using var reader = new StreamReader(src,System.Text.Encoding.UTF8);             var descs =  await reader.ReadLineAsync();            var types = await  reader.ReadLineAsync();            var tags = (await reader.ReadLineAsync()).Split(',');            while (!reader.EndOfStream)            {
+                var line = await reader.ReadLineAsync();
+                if (string.IsNullOrEmpty(line)) continue;
+                var row = line.Split(','); 
+                var time = DateTime.Parse($"{date} {row[0]}"); 
+                var data = row.Select((v, seq) => (tags[seq], double.TryParse(v, out var value) ? value : double.NaN)).Skip(1).ToList();
+                await this.BulkWriteAsync(time, data);                Console.WriteLine($"\x1b[36m{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} \x1b[32mimporting date time \x1b[34m{time:yyyy-MM-dd HH:mm:ss}\x1b[0m");            }
+            Console.WriteLine($"\x1b[36m{DateTime.Now:yyyy-MM-dd HH:mm:ss} \x1b[35mimport from \x1b[33m'{filename}'\x1b[0m -> \x1b[34m{fileSize:F2}MB\x1b[0m");
+            var copied = Path.Combine(Path.GetDirectoryName(src), "copied");
+            if (!Directory.Exists(copied)) Directory.CreateDirectory(copied);
+            File.Move(files[i], Path.Combine(copied, filename));
+        }        Console.WriteLine($"\x1b[36m{DateTime.Now:yyyy-MM-dd HH:mm:ss} Finish to import (total: {(totalSize > 1000 ? $"{totalSize / 1024:f2}GB" : $"{totalSize:f2}MB")})!!\x1b[0m");
+
     }
 }

@@ -14,6 +14,7 @@ IoTDB C# 客户端，提供 PI\eDNA 类似的访问接口，与原生的 session
 
 > 这是最接近官方的 Apache IoTDB Client - C#版客户端，完全原生接口。由于不太符合本人的使用习惯，故提供此库。
 
+IoTDB-SQL 着实令人恼火，其内部人员还美其名曰要走自己的路形成规范，学生啊太自信了，而本身就没规范可言，如 where 和 group by 语义冲突...
 
 > 期盼：iotdb server 端可以支持 plot 查询（降采样，但保留特征值的趋势曲线，如果能做到 1 秒查询 1 周趋势就厉害了！）
 
@@ -51,30 +52,37 @@ class Program
 {
     static async Task Main(string[] args)
     {
-        var start = new DateTime(2022, 8, 4).AddHours(14);
-        var end = new DateTime(2022, 8, 4).AddHours(15);
-        using var client = TimeSeriesClient.CreateInstance("iotdb://root:admin#123@127.0.0.1:6667/database=mydb1");  
-        var archive = await client.HistoryAsync(new List<string> { "RATE_PV" },start ,end, 4);
+        using var client1 = TimeSeriesClient.CreateInstance("iotdb://root:admin#123@192.168.145.120:6667/database=mydb1");
+        using var client2 = TimeSeriesClient.CreateInstance("iotdb://root:admin#123@192.168.145.120:6667/database=mydb2");
+
+        await client2.InitializeAsync(new List<(string Tag, string Type, string Unit, string Desc)> { ("MW", "AI", "兆瓦", "机组负荷") });
+        var archive1 = await client1.HistoryAsync(new List<string> { "RATE_PV" }, new DateTime(2022, 8, 4).AddHours(14), new DateTime(2022, 8, 4).AddHours(15), 4);
+        await client2.BulkWriteAsync("RATE_PV", archive1["RATE_PV"]);
+        var archive2 = await client2.HistoryAsync(new List<string> { "RATE_PV" }, new DateTime(2022, 8, 4).AddHours(14), new DateTime(2022, 8, 4).AddHours(15), 4);
     }
 }
 
 ```
 
-NOTICE: 版本命名变化，跟随 `iotdb` 主版本.子版本.`yy.mmdd`
+## Version 1.0.23.306
++ 解决 `PointAsync` 向下兼容问题, show timeseries `root.device.**`
++ 解决 `BulkWriteAsync` 测点路径带有连字符(-)问题
+- 增强 `HistoryAsync` 实现，分批测点读取数据
+- 增加 `DataFromCsvAsync` 实现，导入历史数据
 
 
 ## Version 1.0.23.216
-- 解决 `DataToCsvAsync` 方法BUG，当无测点时，导致程序异常。
++ 版本命名变化，跟随 iotdb 主版本.子版本.yy.mmdd
++ 解决 DataToCsvAsync 方法BUG，当无测点时，导致程序异常。
 
 
 ## Version 2.13.1110
-- 解决 `TimeSeriesClient` 实例化时控制台输出 `Version` 错误BUG
-- 增加 `DataToCsvAsync` 方法，支持将数据导出至 CSV 文件，注意：按 History 方式导出数据
++ 解决 TimeSeriesClient 实例化时控制台输出 Version 错误BUG
+- 增加 DataToCsvAsync 方法，支持将数据导出至 CSV 文件，注意：按 History 方式导出数据
 
 
 ## Version 2.13.985
 - 增强 `BulkWriteAsync` 实现，支持大数据写入
-
 
 
 ## Version 2.13.980
