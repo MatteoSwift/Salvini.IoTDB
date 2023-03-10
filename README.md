@@ -21,12 +21,12 @@ IoTDB-SQL 着实令人恼火，其内部人员还美其名曰要走自己的路�
 ### Apache Thrift ™
 
 - 下载 [rpc.thrift](https://github.com/apache/iotdb/blob/master/thrift/src/main/thrift/rpc.thrift)
-- 下载 [thrift-0.16.0](http://www.apache.org/dyn/closer.cgi?path=/thrift/0.16.0/thrift-0.16.0.exe)
+- 下载 [thrift-0.18.1](http://www.apache.org/dyn/closer.cgi?path=/thrift/0.18.1/thrift-0.18.1.exe)
 
 - 生成 RPC 调用代码
 
 ```
-thrif-0.16.0.exe -r -gen netstd rpc.thrift
+thrif-0.18.1.exe -r -gen netstd rpc.thrift
 ```
 
 # TimeSeries Client
@@ -64,6 +64,9 @@ class Program
 
 ```
 
+## Version 1.0.23.310
++ 解决 `BulkWriteAsync` 测点路径带有连字符(-)问题
+ 
 ## Version 1.0.23.306
 + 解决 `PointAsync` 向下兼容问题, show timeseries `root.device.**`
 + 解决 `BulkWriteAsync` 测点路径带有连字符(-)问题
@@ -86,19 +89,16 @@ class Program
 
 
 ## Version 2.13.980
-
 - 增加 `BulkWriteAsync` 重载
 - 增加 `Vision` 属性,显示服务端版本号
 - 解决测点名带有(-)连字符问题(path不完全兼容,0.13版以后要使用(\`)反引号括起来非法点名)
 
 
 ## Version 2.13.970.817
-
 - 实现`ArchiveAsync`批量数据查询功能
 - 解决`HistoryAsync`批量查询时测点与数据不对应的BUG
 
 
 ## Version 2.13.970.0
-
 - 解决 `InitializeAsync` 无法更新测点信息 BUG
 - 去掉对 ApacheIoTDB 访问接口的直接公开(原生 `session` 接口)，仅公开 `TimeSeriesClient` 对象

@@ -391,7 +391,7 @@ public sealed class TimeSeriesClient : IDisposable
     {
         var matrix = new dynamic[data.Count + 1, 2];
         matrix[0, 0] = "Timestamp";
-        matrix[0, 1] = tag;
+        matrix[0, 1] = BuildTagName(tag);
         for (int i = 0; i < data.Count; i++)
         {
             matrix[i + 1, 0] = data[i].Time;
@@ -406,7 +406,7 @@ public sealed class TimeSeriesClient : IDisposable
     /// <param name="time">时间戳</param> 
     /// <param name="data">测点数据</param>
     public async Task BulkWriteAsync(DateTime time, List<(string Tag, double Value)> data)
-    {        var values = data.Select(x => (dynamic)x.Value).ToList();        var measurements = data.Select(x => x.Tag).ToList();        var record = new RowRecord(time, values, measurements);        var effect = await session.InsertRecordAsync($"root.{database}", record, false);
+    {        var values = data.Select(x => (dynamic)x.Value).ToList();        var measurements = data.Select(x => BuildTagName(x.Tag)).ToList();        var record = new RowRecord(time, values, measurements);        var effect = await session.InsertRecordAsync($"root.{database}", record, false);
 
         //var matrix = new dynamic[2, data.Count + 1];
         //matrix[0, 0] = "Timestamp";
@@ -418,7 +418,7 @@ public sealed class TimeSeriesClient : IDisposable
         //}
         //await BulkWriteAsync(matrix);
     }
-    
+
     /// <summary>
     /// 写入数据
     /// </summary>
@@ -439,7 +439,7 @@ public sealed class TimeSeriesClient : IDisposable
             var measurements = cols.Select((j) => BuildTagName(((string)matrix[0, j])).Replace("root.", string.Empty)).ToList();
             if (rows == 2)
             {
-                var values = cols.Select((j) => matrix[1, j]).ToList();                var record = new RowRecord(UTC_MS(matrix[1, 0]),values,measurements);                var effect = await session.InsertRecordAsync($"root.{database}", record, false); 
+                var values = cols.Select((j) => matrix[1, j]).ToList();                var record = new RowRecord(UTC_MS(matrix[1, 0]), values, measurements);                var effect = await session.InsertRecordAsync($"root.{database}", record, false);
             }
             else
             {
@@ -599,7 +599,7 @@ public sealed class TimeSeriesClient : IDisposable
         }
         Console.WriteLine($"\x1b[36m{DateTime.Now:yyyy-MM-dd HH:mm:ss} Finish to export !!\x1b[0m");
     }
- 
+
     /// <summary>
     /// 导入历史数据CSV
     /// </summary>
@@ -607,14 +607,16 @@ public sealed class TimeSeriesClient : IDisposable
     public async Task DataFromCsvAsync(string[] files)
     {        var totalSize = 0d;        Console.WriteLine($"\x1b[36m{DateTime.Now:yyyy-MM-dd HH:mm:ss} \x1b[36mReady to import !!\x1b[0m");
         for (var i = 0; i < files.Length; i++)
-        {            var file = new FileInfo(files[i]);            if (!file.Exists) continue;             var src = file.FullName;
+        {            var file = new FileInfo(files[i]);            if (!file.Exists) continue;
+            var src = file.FullName;
             var fileSize = file.Length / 1024.0 / 1024.0;
             var filename = file.Name;
-            var date = filename.Replace(".csv", "", StringComparison.OrdinalIgnoreCase);            totalSize += fileSize;            using var reader = new StreamReader(src,System.Text.Encoding.UTF8);             var descs =  await reader.ReadLineAsync();            var types = await  reader.ReadLineAsync();            var tags = (await reader.ReadLineAsync()).Split(',');            while (!reader.EndOfStream)            {
+            var date = filename.Replace(".csv", "", StringComparison.OrdinalIgnoreCase);            totalSize += fileSize;            using var reader = new StreamReader(src, System.Text.Encoding.UTF8);
+            var descs = await reader.ReadLineAsync();            var types = await reader.ReadLineAsync();            var tags = (await reader.ReadLineAsync()).Split(',');            while (!reader.EndOfStream)            {
                 var line = await reader.ReadLineAsync();
                 if (string.IsNullOrEmpty(line)) continue;
-                var row = line.Split(','); 
-                var time = DateTime.Parse($"{date} {row[0]}"); 
+                var row = line.Split(',');
+                var time = DateTime.Parse($"{date} {row[0]}");
                 var data = row.Select((v, seq) => (tags[seq], double.TryParse(v, out var value) ? value : double.NaN)).Skip(1).ToList();
                 await this.BulkWriteAsync(time, data);                Console.WriteLine($"\x1b[36m{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} \x1b[32mimporting date time \x1b[34m{time:yyyy-MM-dd HH:mm:ss}\x1b[0m");            }
             Console.WriteLine($"\x1b[36m{DateTime.Now:yyyy-MM-dd HH:mm:ss} \x1b[35mimport from \x1b[33m'{filename}'\x1b[0m -> \x1b[34m{fileSize:F2}MB\x1b[0m");

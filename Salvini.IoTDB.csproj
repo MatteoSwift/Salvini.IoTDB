@@ -4,15 +4,15 @@
 		<TargetFramework>net6.0</TargetFramework>
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
-		<Version>1.0.23.306</Version>
+		<Version>1.0.23.310</Version>
 		<Description>Apache IoTDB Client</Description>
 		<NoWarn>CS0168;CS8618;CS8600;CS8602;CS8603;CS8604;CS8625;CS8765</NoWarn>
 		<Copyright>Salvini</Copyright>
 		<Authors>Salvini</Authors>
 		<DebugType>embedded</DebugType>
 		<PackageReadmeFile>README.md</PackageReadmeFile>
-		<PackageProjectUrl>https://git.weixin.qq.com/Salvini/iotdb-csharp.git</PackageProjectUrl>
-		<RepositoryUrl>https://git.weixin.qq.com/Salvini/iotdb-csharp.git</RepositoryUrl>
+		<PackageProjectUrl>https://github.com/MatteoSwift/Salvini.IoTDB.git</PackageProjectUrl>
+		<RepositoryUrl>https://github.com/MatteoSwift/Salvini.IoTDB.git</RepositoryUrl>
 		<PackageTags>IoTDB</PackageTags>
 		<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
 	</PropertyGroup>
@@ -21,7 +21,7 @@
 	  <WarningLevel>4</WarningLevel>
 	</PropertyGroup>
 	<ItemGroup>
-		<PackageReference Include="ApacheThrift" Version="0.16.0" />
+		<PackageReference Include="ApacheThrift" Version="0.18.1" />
 	</ItemGroup>
 
 	<ItemGroup>
